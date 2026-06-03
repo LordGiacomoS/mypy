@@ -667,8 +667,11 @@ class TypeAnalyser(SyntheticTypeVisitor[Type], TypeAnalyzerPluginInterface):
                 self.anal_array(t.args, allow_unpack=True), line=t.line, column=t.column
             )
         elif fullname == "typing.Union":
-            items = self.anal_array(t.args)
-            return UnionType.make_union(items, line=t.line, column=t.column)
+            if len(t.args) == 0 and self.options.python_version >= (3, 14):
+                return self.named_type("typing.Union", [], line=t.line, column=t.column)
+            else:
+                items = self.anal_array(t.args)
+                return UnionType.make_union(items, line=t.line, column=t.column)
         elif fullname == "typing.Optional":
             if len(t.args) != 1:
                 self.fail(
