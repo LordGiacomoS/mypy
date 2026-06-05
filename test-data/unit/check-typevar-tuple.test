@@ -578,6 +578,7 @@ reveal_type(b)  # N: Revealed type is "def (*Any) -> builtins.int"
 [builtins fixtures/tuple.pyi]
 
 [case testTypeVarTuplePep646CallableNewSyntax]
+# flags: --python-version 3.11
 from typing import Callable, Generic, Tuple
 from typing_extensions import ParamSpec
 
@@ -882,7 +883,39 @@ z: C
 reveal_type(x)  # N: Revealed type is "Any"
 reveal_type(y)  # N: Revealed type is "Any"
 reveal_type(z)  # N: Revealed type is "tuple[builtins.int, Unpack[builtins.tuple[Any, ...]]]"
+[builtins fixtures/tuple.pyi]
 
+[case testBanPathologicalRecursiveTuplesGeneric]
+from typing import TypeVarTuple, Unpack
+
+Ts = TypeVarTuple("Ts")
+A = tuple[Unpack[B[Unpack[Ts]]]]  # E: Invalid recursive alias: a tuple item of itself \
+                                  # E: Name "B" is used before definition
+B = tuple[Unpack[A[Unpack[Ts]]]]
+[builtins fixtures/tuple.pyi]
+
+[case testNoCrashOnInvalidRecursiveUnpackOfUnion]
+from typing import Unpack
+
+A = tuple[int, str] | list[tuple[Unpack[A]]]  # E: "tuple[int, str] | list[tuple[Unpack[A]]]" cannot be unpacked (must be tuple or TypeVarTuple)
+[builtins fixtures/tuple.pyi]
+
+[case testNoCrashOnNonNormalRecursiveTuple]
+from typing import Unpack
+
+A = tuple[int, list[tuple[str, Unpack[A]]]]
+a: A
+x, y = a
+y[0] = 1  # E: Incompatible types in assignment (expression has type "int", target has type "tuple[str, Unpack[A]]")
+[builtins fixtures/list.pyi]
+
+[case testBanTypeVarTupleNotImmediatelyInsideUnpack]
+from typing import TypeVarTuple, Unpack
+
+Ts = TypeVarTuple("Ts")
+A = tuple[Unpack[tuple[Ts]]]  # E: TypeVarTuple "Ts" is only valid with an unpack
+x: A[int, str]
+reveal_type(x)  # N: Revealed type is "tuple[Any]"
 [builtins fixtures/tuple.pyi]
 
 [case testInferenceAgainstGenericVariadicWithBadType]
@@ -2155,6 +2188,7 @@ def f(x: int | None):
 [builtins fixtures/tuple.pyi]
 
 [case testJoinOfVariadicTupleCallablesNoCrash]
+# flags: --python-version 3.11
 from typing import Callable, Tuple
 
 f: Callable[[int, *Tuple[str, ...], int], None]
@@ -2608,6 +2642,7 @@ def test(xs: tuple[Unpack[Ts]], xsi: tuple[int, Unpack[Ts]]) -> None:
 [builtins fixtures/tuple.pyi]
 
 [case testTypeVarTupleInferAgainstAnyCallableSuffix]
+# flags: --python-version 3.11
 from typing import Any, Callable, TypeVar, TypeVarTuple
 
 Ts = TypeVarTuple("Ts")
@@ -2620,6 +2655,7 @@ reveal_type(deco(untyped))  # N: Revealed type is "def (*Any) -> Any"
 [builtins fixtures/tuple.pyi]
 
 [case testNoCrashOnNonNormalUnpackInCallable]
+# flags: --python-version 3.11
 from typing import Callable, Unpack, TypeVar
 
 T = TypeVar("T")
