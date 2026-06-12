@@ -34,10 +34,11 @@ from typing import TYPE_CHECKING, Final, TypeAlias as _TypeAlias
 import mypy.state
 from mypy.checker import FineGrainedDeferredNode
 from mypy.errors import Errors
-from mypy.nodes import Decorator, FuncDef, MypyFile, OverloadedFuncDef, TypeInfo
-from mypy.options import Options
+from mypy.nodes import Decorator, FuncDef, MypyFile, OverloadedFuncDef, TypeInfo, Var
+from mypy.options import Options, UNION_TYPE_CHANGES
 from mypy.plugin import ClassDefContext
 from mypy.plugins import dataclasses as dataclasses_plugin
+from mypy.scope import Scope
 from mypy.semanal import (
     SemanticAnalyzer,
     apply_semantic_analyzer_patches,
@@ -102,6 +103,8 @@ def semantic_analysis_for_scc(graph: Graph, scc: list[str], errors: Errors) -> N
     # Clean-up builtins, so that TypeVar etc. are not accessible without importing.
     if "builtins" in scc:
         cleanup_builtin_scc(graph["builtins"])
+    if "typing" in scc:
+        check_union_type_changes_viablity(graph["typing"], errors)
 
     # Report TypeForm profiling stats
     if len(scc) >= 1:
@@ -114,6 +117,69 @@ def semantic_analysis_for_scc(graph: Graph, scc: list[str], errors: Errors) -> N
             type_expression_full_parse_failure_count=analyzer.type_expression_full_parse_failure_count,
         )
 
+def check_union_type_changes_viablity(state: State, errors: Errors) -> None:
+    scope = Scope()
+    # not 100% sure scope is necessary to specify (it seemed to raise the correct errors just
+    # fine despite a value of None), but I'm also not familiar enough with the codebase to
+    # make that determination
+    
+    errors.set_file(
+        state.xpath,
+        "typing",
+        errors.options,
+        scope
+    )
+    # after this, the targetted file will get changed when build.process_stale_scc starts calling
+    # type_check_first_pass on each graph value, meaning there is no need to save the previous
+    # values for later reversion
+
+    with scope.module_scope(state.tree.fullname):
+        options = state.options
+        union_sym_node = state.tree.names["Union"].node
+        if UNION_TYPE_CHANGES in options.enable_incomplete_feature:
+            if options.python_version < (3, 14):
+                errors.report(
+                    union_sym_node.line,
+                    union_sym_node.column,
+                    '"UnionTypeChanges" support is only available for code in python 3.14+',
+                    blocker=True,
+                    severity="error",
+                    only_once=True
+                )
+            elif isinstance(union_sym_node, Var): 
+                # this last layer of checks only makes sense so long as base mypy doesn't
+                # implement union-314 changes to its default typeshed. If mypy does implement changes,
+                # the error complaining about custom typeshed being wrong should be the default
+                if options.custom_typeshed_dir is None:
+                    errors.report(
+                        union_sym_node.line,
+                        union_sym_node.column,
+                        '"UnionTypeChanges" support is incompatible with the default typeshed,'
+                        " must have a custom typeshed that implements union-314 changes (https://github.com/Viicos/typeshed/tree/union-314)",
+                        blocker=True,
+                        severity="error",
+                        only_once=True
+                    )
+                else:
+                    errors.report(
+                        union_sym_node.line,
+                        union_sym_node.column,
+                        f'"UnionTypeChanges" support is incompatible with the custom typeshed directory "{options.custom_typeshed_dir}",'
+                        " must have a custom typeshed that implements union-314 changes (https://github.com/Viicos/typeshed/tree/union-314)",
+                        blocker=True,
+                        severity="error",
+                        only_once=True
+                    )
+        elif isinstance(union_sym_node, TypeInfo):
+            errors.report(
+                union_sym_node.line,
+                union_sym_node.column,
+                '"UnionTypeChanges" support is experimental,'
+                " use --enable-incomplete-feature=UnionTypeChanges to enable",
+                blocker=True,
+                severity="error",
+                only_once=True
+            )
 
 def cleanup_builtin_scc(state: State) -> None:
     """Remove imported names from builtins namespace.

@@ -49,7 +49,7 @@ from mypy.nodes import (
     check_arg_kinds,
     check_param_names,
 )
-from mypy.options import INLINE_TYPEDDICT, Options
+from mypy.options import INLINE_TYPEDDICT, UNION_TYPE_CHANGES, Options
 from mypy.plugin import AnalyzeTypeContext, Plugin, TypeAnalyzerPluginInterface
 from mypy.semanal_shared import (
     SemanticAnalyzerCoreInterface,
@@ -670,7 +670,7 @@ class TypeAnalyser(SyntheticTypeVisitor[Type], TypeAnalyzerPluginInterface):
                 self.anal_array(t.args, allow_unpack=True), line=t.line, column=t.column
             )
         elif fullname == "typing.Union":
-            if len(t.args) == 0 and self.options.python_version >= (3, 14):
+            if len(t.args) == 0 and UNION_TYPE_CHANGES in self.options.enable_incomplete_feature:
                 return self.named_type("typing.Union", [], line=t.line, column=t.column)
             else:
                 items = self.anal_array(t.args)
