@@ -129,10 +129,13 @@ def check_union_type_changes_viablity(state: State, errors: Errors) -> None:
     # type_check_first_pass on each graph value, meaning there is no need to save the previous
     # values for later reversion
     assert state.tree is not None
+    if "Union" not in state.tree.names:
+        return
+
     with scope.module_scope(state.tree.fullname):
-        options = state.options
         union_sym_node = state.tree.names["Union"].node
         assert union_sym_node is not None
+        options = state.options
         if UNION_TYPE_CHANGES in options.enable_incomplete_feature:
             if options.python_version < (3, 14):
                 errors.report(
