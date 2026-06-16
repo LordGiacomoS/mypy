@@ -673,7 +673,7 @@ class TypeAnalyser(SyntheticTypeVisitor[Type], TypeAnalyzerPluginInterface):
             if len(t.args) == 0 and UNION_TYPE_CHANGES in self.options.enable_incomplete_feature:
                 items = [self.get_omitted_any(t)]
             else:
-                 items = self.anal_array(t.args)
+                items = self.anal_array(t.args)
             return UnionType.make_union(items, line=t.line, column=t.column)
         elif fullname == "typing.Optional":
             if len(t.args) != 1:
