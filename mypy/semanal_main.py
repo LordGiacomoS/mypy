@@ -125,7 +125,7 @@ def check_union_type_changes_viablity(state: State, errors: Errors) -> None:
     # make that determination
 
     errors.set_file(state.xpath, "typing", errors.options, scope)
-    # after this, the targetted file will get changed when build.process_stale_scc starts calling
+    # after this, the targeted file will get changed when build.process_stale_scc starts calling
     # type_check_first_pass on each graph value, meaning there is no need to save the previous
     # values for later reversion
     assert state.tree is not None
