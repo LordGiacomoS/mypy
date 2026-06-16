@@ -132,10 +132,11 @@ def check_union_type_changes_viablity(state: State, errors: Errors) -> None:
     # after this, the targetted file will get changed when build.process_stale_scc starts calling
     # type_check_first_pass on each graph value, meaning there is no need to save the previous
     # values for later reversion
-
+    assert state.tree is not None
     with scope.module_scope(state.tree.fullname):
         options = state.options
         union_sym_node = state.tree.names["Union"].node
+        assert union_sym_node is not None
         if UNION_TYPE_CHANGES in options.enable_incomplete_feature:
             if options.python_version < (3, 14):
                 errors.report(
