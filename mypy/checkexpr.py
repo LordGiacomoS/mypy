@@ -424,6 +424,14 @@ class ExpressionChecker(ExpressionVisitor[Type], ExpressionCheckerSharedApi):
             elif node.fullname == "types.NoneType":
                 # We special case NoneType, because its stub definition is not related to None.
                 return TypeType(NoneType())
+            elif node.fullname == "typing.Union":
+                # We special case Union, because its stub definition in 3.14 is a call that acts
+                # like a special form, and the default parsing doesn't work with it for old-style usages
+                # like 'Union[a, b]'.
+
+                # does not appear to get triggered outside of union changes -- further testing is necessary
+                # assert self.chk.options.python_version >= (3, 14)
+                return AnyType(TypeOfAny.unannotated)
             else:
                 return type_object_type(node)
         elif isinstance(node, TypeAlias):
