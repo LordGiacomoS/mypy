@@ -1,0 +1,129 @@
+[case testUnion314Changes_withChangedTypeshed]
+reveal_type(str | int) # N: Revealed type is "Any"
+[fixture types.pyi]
+from typing import Union as UnionType
+__all__ = ["UnionType"]
+[fixture typing.pyi]
+import typing_extensions
+TypeVar = 0
+class Sequence: pass
+class Mapping: pass
+class Iterable: pass
+class Union:
+    def __class_getitem__(cls, item) -> Union: pass
+
+ByteString: typing_extensions.TypeAlias = bytes | bytearray | memoryview
+[fixture builtins.pyi]
+from typing import Sequence, TypeVar
+import types
+
+Self = TypeVar("Self")
+
+class type:
+    def __or__(self, other) -> types.UnionType | Self: pass
+    def __ror__(self, other) -> types.UnionType | Self: pass
+
+class ellipsis: pass
+class int: pass
+class str: pass
+class tuple: pass
+class list(Sequence): pass
+class dict: pass
+class bytes: pass
+class bytearray: pass
+class memoryview: pass
+
+
+[case testTypingGetOriginFunc]
+# No clue why I couldn't find tests for get_origin but since I'm messing with
+# it and need them to help avoid breaking stuff, I'll write some myself.
+# test data set sourced from:
+#   - get_origin's docstring: (https://github.com/python/cpython/blob/984ebbfeecaa8b614fd81ebac4460e301ffc8f08/Lib/typing.py#L2553-L2580),
+#   - get_origin's actual doc page: (https://docs.python.org/3.15/library/typing.html#typing.get_origin)
+from typing import (
+    cast,
+    get_origin,
+    Annotated,
+    ClassVar,
+    Generic,
+    List,
+    Literal,
+    ParamSpec,
+    Tuple,
+    TypeVar,
+    Union,
+)
+
+get_origin(int) # None
+get_origin(str) # None
+get_origin(Literal[42]) # Literal
+get_origin(ClassVar[int]) # ClassVar
+get_origin(Generic) # Generic
+get_origin(Union[int, str]) # Union
+get_origin(dict[str, int]) # dict
+get_origin(Annotated[str, "metadata"]) # Annotated
+
+T = TypeVar('T')
+get_origin(Generic[T]) # E: Value of type "int" is not indexable # Generic
+get_origin(Union[T, int]) # Union
+get_origin(list[tuple[T, T]][int]) # E: Type variable "__main__.T" is unbound # N: (Hint: Use "Generic[T]" or "Protocol[T]" base class to bind "T" inside a class) # N: (Hint: Use "T" in function signature to bind "T" inside a function) # list
+get_origin(List[Tuple[T, T]][int]) # E: Type variable "__main__.T" is unbound # N: (Hint: Use "Generic[T]" or "Protocol[T]" base class to bind "T" inside a class) # N: (Hint: Use "T" in function signature to bind "T" inside a function) # list
+# Issues flagged here are present without my changes to get_origin,
+# so handling is necessary
+
+# Mypy refuses to do type narrowing on ParamSpec by default, and
+# I can't annotate a typevar-like, so the cast below is necessary.
+P = cast(ParamSpec, ParamSpec('P'))
+get_origin(P.args) # P
+get_origin(P.kwargs) # P
+[fixture typing.pyi]
+from types import GenericAlias, UnionType
+
+class _SpecialForm: pass
+class TypeVar: pass
+class ParamSpec:
+    def __init__(
+        self, name: str, *, bound: Any | None = None, contravariant: bool = False, covariant: bool = False  # AnnotationForm
+    ) -> None: ...
+    args: ParamSpecArgs
+    kwargs: ParamSpecKwargs
+class TypeVarTuple: ...
+
+cast = 0
+overload = 0
+Any = object()
+Generic = 0
+Optional = 0
+Protocol = 0
+Tuple = 0
+Type = 0
+Annotated: _SpecialForm
+ClassVar: _SpecialForm
+Literal: _SpecialForm
+Union: _SpecialForm
+
+T = TypeVar('T')
+T_co = TypeVar('T_co', covariant=True)
+
+class Iterable(Protocol[T_co]): pass
+class Iterator(Iterable[T_co], Protocol): pass
+class Sequence(Iterable[T_co]): pass
+class Mapping(Iterable[T], Generic[T, T_co]): pass
+class ParamSpecArgs: pass
+class ParamSpecKwargs: pass
+
+@overload
+def get_origin(tp: UnionType) -> type: ...
+@overload
+def get_origin(tp: GenericAlias) -> type | TypeAliasType: ...
+@overload
+def get_origin(tp: Any) -> Any | None: ...
+
+class TypeAliasType:
+    def __init__(
+        self, name: str, value: Any, type_params: tuple[Union[TypeVar, ParamSpec, TypeVarTuple], ...]
+    ) -> None: ...
+
+    def __or__(self, other: Any) -> Any: ...
+    def __ror__(self, other: Any) -> Any: ...
+[builtins fixtures/paramspec.pyi]
