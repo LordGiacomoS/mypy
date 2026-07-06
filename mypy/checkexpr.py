@@ -4622,6 +4622,13 @@ class ExpressionChecker(ExpressionVisitor[Type], ExpressionCheckerSharedApi):
                 or left_type.type_object().fullname == "builtins.type"
             ):
                 return self.named_type("types.GenericAlias")
+            elif left_type.type_object().fullname == "typing.Union":
+                # isn't encountered without typeshed changes, so no checks necessary
+                if isinstance(index, TupleExpr):
+                    return make_simplified_union([self.accept(item) for item in index.items])
+                else:
+                    assert isinstance(index, OpExpr)
+                    return self.visit_op_expr(index)
 
         if isinstance(left_type, TypeVarType):
             return self.visit_index_with_type(
