@@ -3690,6 +3690,7 @@ class ExpressionChecker(ExpressionVisitor[Type], ExpressionCheckerSharedApi):
                     arg=e.right,
                     context=e,
                     allow_reverse=use_reverse is UseReverse.DEFAULT,
+                    maintain_order=e.op == "|" and use_reverse is UseReverse.DEFAULT,
                 )
             elif use_reverse is UseReverse.ALWAYS:
                 result, method_type = self.check_op(
@@ -4309,6 +4310,7 @@ class ExpressionChecker(ExpressionVisitor[Type], ExpressionCheckerSharedApi):
         arg: Expression,
         context: Context,
         allow_reverse: bool = False,
+        maintain_order: bool = False,
     ) -> tuple[Type, Type]:
         """Type check a binary operation which maps to a method call.
 
@@ -4342,7 +4344,7 @@ class ExpressionChecker(ExpressionVisitor[Type], ExpressionCheckerSharedApi):
                     all_inferred.append(inferred)
 
             if not local_errors.has_new_errors():
-                results_final = make_simplified_union(all_results)
+                results_final = make_simplified_union(all_results, maintain_order=maintain_order)
                 inferred_final = make_simplified_union(all_inferred)
                 return results_final, inferred_final
 

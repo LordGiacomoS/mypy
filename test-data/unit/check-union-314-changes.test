@@ -1,9 +1,8 @@
 [case testUnion314Changes_withChangedTypeshed_pep604]
 reveal_type(str | str) # N: Revealed type is "def () -> builtins.str"
 reveal_type(str | int) # N: Revealed type is "(def () -> builtins.str) | (def () -> builtins.int)"
-reveal_type(str | int | float) # N: Revealed type is "(def () -> builtins.str) | (def () -> builtins.float) | (def () -> builtins.int)"
-# There's an issue with how pep604 unions order their types within reveal_type compared to standard unions.
-# Not really fixable without significant reworking of ExpressionChecker.visit_op_expr.
+reveal_type(str | int | float) # N: Revealed type is "(def () -> builtins.str) | (def () -> builtins.int) | (def () -> builtins.float)"
+reveal_type(str | int | float | bool) # N: Revealed type is "(def () -> builtins.str) | (def () -> builtins.int) | (def () -> builtins.float) | (def () -> builtins.bool)"
 [fixture types.pyi]
 from typing import Union as UnionType
 __all__ = ["UnionType"]

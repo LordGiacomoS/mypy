@@ -610,6 +610,7 @@ def make_simplified_union(
     keep_erased: bool = False,
     contract_literals: bool = True,
     handle_recursive: bool = True,
+    maintain_order: bool = False,
 ) -> ProperType:
     """Build union type with redundant union items removed.
 
@@ -636,6 +637,9 @@ def make_simplified_union(
     """
     # Step 1: expand all nested unions
     items = flatten_nested_unions(items, handle_recursive=handle_recursive)
+    maintain_order = maintain_order and len(items) > 1
+    if maintain_order:
+        items = [items[1]] + items[:1:-1] + [items[0]]
 
     # Step 2: fast path for single item
     if len(items) == 1:
@@ -643,7 +647,8 @@ def make_simplified_union(
 
     # Step 3: remove redundant unions
     simplified_set: Sequence[Type] = _remove_redundant_union_items(items, keep_erased)
-
+    if maintain_order:
+        simplified_set = simplified_set[::-1]
     # Step 4: If more than one literal exists in the union, try to simplify
     if (
         contract_literals
