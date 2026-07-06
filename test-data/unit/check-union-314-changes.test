@@ -1,4 +1,40 @@
-[case testUnion314Changes_withChangedTypeshed]
+[case testUnion314Changes_withChangedTypeshed_pep604]
+reveal_type(str | str) # N: Revealed type is "def () -> builtins.str"
+reveal_type(str | int) # N: Revealed type is "(def () -> builtins.str) | (def () -> builtins.int)"
+reveal_type(str | int | float) # N: Revealed type is "(def () -> builtins.str) | (def () -> builtins.float) | (def () -> builtins.int)"
+# There's an issue with how pep604 unions order their types within reveal_type compared to standard unions.
+# Not really fixable without significant reworking of ExpressionChecker.visit_op_expr.
+[fixture types.pyi]
+from typing import Union as UnionType
+__all__ = ["UnionType"]
+[typing fixtures/typing-314changes.pyi]
+[builtins fixtures/union-314changes.pyi]
+
+
+[case testUnion314Changes_withChangedTypeshed_typing]
+import typing
+reveal_type(typing.Union) # N: Revealed type is "def () -> typing.Union"
+reveal_type(typing.Union[str, str]) # N: Revealed type is "def () -> builtins.str"
+reveal_type(typing.Union[str, int]) # N: Revealed type is "(def () -> builtins.str) | (def () -> builtins.int)"
+reveal_type(typing.Union[str, int, float]) # N: Revealed type is "(def () -> builtins.str) | (def () -> builtins.int) | (def () -> builtins.float)"
+[typing fixtures/typing-314changes.pyi]
+[builtins fixtures/union-314changes.pyi]
+
+
+[case testUnion314Changes_withChangedTypeshed_types]
+import types
+reveal_type(types.UnionType) # N: Revealed type is "def () -> typing.Union"
+reveal_type(types.UnionType[str, str]) # N: Revealed type is "def () -> builtins.str"
+reveal_type(types.UnionType[str, int]) # N: Revealed type is "(def () -> builtins.str) | (def () -> builtins.int)"
+reveal_type(types.UnionType[str, int, float]) # N: Revealed type is "(def () -> builtins.str) | (def () -> builtins.int) | (def () -> builtins.float)"
+[fixture types.pyi]
+from typing import Union as UnionType
+__all__ = ["UnionType"]
+[typing fixtures/typing-314changes.pyi]
+[builtins fixtures/union-314changes.pyi]
+
+
+[case testUnion314Changes_withChangedTypeshed_crashPrevented]
 reveal_type(str | int) # N: Revealed type is "Any"
 [fixture types.pyi]
 from typing import Union as UnionType
@@ -34,7 +70,7 @@ class bytearray: pass
 class memoryview: pass
 
 
-[case testTypingGetOriginFunc]
+[case testUnion314Changes_testTypingGetOriginFunc]
 # No clue why I couldn't find tests for get_origin but since I'm messing with
 # it and need them to help avoid breaking stuff, I'll write some myself.
 # test data set sourced from:
