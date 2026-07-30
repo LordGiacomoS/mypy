@@ -1,0 +1,82 @@
+[case lgsUnions314_testUnionTypeEquivalence]
+# flags: --python-version 3.14
+from typing import assert_type, Union
+from types import UnionType
+# import typing_extensions
+
+assert_type(UnionType, type[Union])
+# assert_type(typing_extensions.Union, Union)
+[fixture types.pyi]
+from typing import Union as UnionType
+__all__ = ["UnionType"]
+[typing fixtures/typing-union_python3_14.pyi]
+[builtins fixtures/union_python3_14.pyi]
+
+
+[case lgsUnions314_testUnionInstanceEquivalence]
+# flags: --python-version 3.14
+from typing import assert_type, Union
+from types import UnionType
+# import typing_extensions
+
+assert_type(UnionType[str, int], type[Union[str, int]])
+# some issues with these because of how pep604 unions get parsed
+assert_type(str | int, type[Union[str, int]]) # E: Expression is of type "Union | type[int]", not "type[str] | type[int]"
+assert_type(Union[str | int], type[Union[str, int]]) # E: Expression is of type "Union | type[int]", not "type[str] | type[int]"
+# assert_type(typing_extensions.Union[str, int], type[Union[str, int]])
+[fixture types.pyi]
+from typing import Union as UnionType
+__all__ = ["UnionType"]
+[typing fixtures/typing-union_python3_14.pyi]
+[builtins fixtures/union_python3_14.pyi]
+
+# TODO: get these versions of tests to pass, and replace excepted ones in case above with them
+[case lgsUnions314_testUnionInstanceEquivalence-xfail]
+# flags: --python-version 3.14
+from typing import assert_type, Union
+
+assert_type(str | int, type[Union[str, int]])
+assert_type(Union[str | int], type[Union[str, int]])
+[fixture types.pyi]
+from typing import Union as UnionType
+__all__ = ["UnionType"]
+[typing fixtures/typing-union_python3_14.pyi]
+[builtins fixtures/union_python3_14.pyi]
+
+[case lgsUnions314_testTypingUnionInstanceSignatureUsage]
+# flags: --python-version 3.14
+from typing import assert_type, Union
+
+def f1(x: Union[str, int]) -> None: pass
+f1("one")
+f1(b"one") # E: Argument 1 to "f1" has incompatible type "bytes"; expected "str | int"
+f1(1)
+f1(True)
+f1(1.0) # E: Argument 1 to "f1" has incompatible type "float"; expected "str | int"
+
+def f2() -> str | int: pass
+assert_type(f2(), str | int)
+[typing fixtures/typing-union_python3_14.pyi]
+[builtins fixtures/union_python3_14.pyi]
+
+
+[case lgsUnions314_testPEP604UnionInstanceSignatureUsage]
+from typing import assert_type
+def f1(x: str | int) -> None: pass
+
+f1("one")
+f1(b"one") # E: Argument 1 to "f1" has incompatible type "bytes"; expected "str | int"
+f1(1)
+f1(True)
+f1(1.0) # E: Argument 1 to "f1" has incompatible type "float"; expected "str | int"
+
+def f2() -> str | int: pass
+assert_type(f2(), str | int)
+[fixture types.pyi]
+from typing import Union as UnionType
+__all__ = ["UnionType"]
+[typing fixtures/typing-union_python3_14.pyi]
+[builtins fixtures/union_python3_14.pyi]
+
+
+-- [case lgsUnions314_test]
