@@ -150,7 +150,6 @@ from mypy.typeops import (
     false_only,
     fixup_partial_type,
     freeze_all_type_vars,
-    function_type,
     get_all_type_vars,
     get_type_vars,
     is_literal_type_like,
@@ -415,7 +414,7 @@ class ExpressionChecker(ExpressionVisitor[Type], ExpressionCheckerSharedApi):
         if isinstance(node, (Var, Decorator, OverloadedFuncDef)):
             return node.type or AnyType(TypeOfAny.special_form)
         elif isinstance(node, FuncDef):
-            return function_type(node, self.named_type("builtins.function"))
+            return self.chk.function_type(node)
         elif isinstance(node, TypeInfo):
             # Reference to a type object.
             if node.typeddict_type:
@@ -3596,7 +3595,11 @@ class ExpressionChecker(ExpressionVisitor[Type], ExpressionCheckerSharedApi):
 
     def visit_ellipsis(self, e: EllipsisExpr) -> Type:
         """Type check '...'."""
-        return self.named_type("builtins.ellipsis")
+        try:
+            return self.named_type("types.EllipsisType")
+        except KeyError:
+            # In test cases 'types' may not be available or may be shadowed.
+            return AnyType(TypeOfAny.special_form)
 
     def visit_op_expr(self, e: OpExpr) -> Type:
         """Type check a binary operator expression."""

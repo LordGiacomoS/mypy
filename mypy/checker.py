@@ -604,18 +604,32 @@ class TypeChecker(NodeVisitor[None], TypeCheckerSharedApi, SplittingVisitor):
             with self.tscope.module_scope(self.tree.fullname):
                 with self.enter_partial_types(), self.binder.top_frame_context():
                     marked_unreachable = False
+                    reported_unreachable = False
                     for d in self.tree.defs:
                         if self.binder.is_unreachable():
+                            finish = False
                             if not marked_unreachable:
                                 self.mark_unreachable(self.tree.defs, after=d)
                                 marked_unreachable = True
                             if not self.should_report_unreachable_issues():
-                                break
-                            if not self.is_noop_for_reachability(d):
+                                finish = True
+                            if (
+                                not finish
+                                and not reported_unreachable
+                                and not self.is_noop_for_reachability(d)
+                            ):
                                 self.msg.unreachable_statement(d)
+                                self.binder.suppress_unreachable_warnings()
+                                finish = True
+                                reported_unreachable = True
+
+                            if finish and not self.options.check_unreachable:
                                 break
-                        else:
-                            self.accept(d)
+
+                            if not self.options.check_unreachable:
+                                continue
+
+                        self.accept(d)
 
                 assert not self.current_node_deferred
 
@@ -1487,7 +1501,8 @@ class TypeChecker(NodeVisitor[None], TypeCheckerSharedApi, SplittingVisitor):
                         # TODO: check recursively for inner type variables
                         if (
                             arg_type.variance == COVARIANT
-                            and defn.name not in ("__init__", "__new__", "__post_init__")
+                            and defn.name
+                            not in {"__init__", "__new__", "__post_init__", "__replace__"}
                             and not is_private(defn.name)  # private methods are not inherited
                             and (i != 0 or not found_self)
                         ):
@@ -3302,20 +3317,34 @@ class TypeChecker(NodeVisitor[None], TypeCheckerSharedApi, SplittingVisitor):
             self.binder.unreachable()
             return
         marked_unreachable = False
+        reported_unreachable = False
         for s in b.body:
             if self.binder.is_unreachable():
+                finish = False
                 if self.scope.top_level_function() is None and not marked_unreachable:
                     self.mark_unreachable(b.body, after=s)
                     marked_unreachable = True
                 if not self.should_report_unreachable_issues():
-                    break
-                if not self.is_noop_for_reachability(s):
+                    finish = True
+                if (
+                    not finish
+                    and not reported_unreachable
+                    and not self.is_noop_for_reachability(s)
+                ):
                     self.msg.unreachable_statement(s)
+                    self.binder.suppress_unreachable_warnings()
+                    finish = True
+                    reported_unreachable = True
+
+                if finish and not self.options.check_unreachable:
                     break
-            else:
-                self.accept(s)
-                # Clear expression cache after each statement to avoid unlimited growth.
-                self.expr_checker.expr_cache.clear()
+
+                if not self.options.check_unreachable:
+                    continue
+
+            self.accept(s)
+            # Clear expression cache after each statement to avoid unlimited growth.
+            self.expr_checker.expr_cache.clear()
 
     def should_report_unreachable_issues(self) -> bool:
         return (
@@ -4408,8 +4437,10 @@ class TypeChecker(NodeVisitor[None], TypeCheckerSharedApi, SplittingVisitor):
                     # inferred return type for an overloaded function
                     # to be ambiguous.
                     return
-                assert isinstance(reinferred_rvalue_type, TupleType)
-                rvalue_type = reinferred_rvalue_type
+                if isinstance(reinferred_rvalue_type, TupleType):
+                    # This branch will usually be taken, but in some cases context can
+                    # e.g. select a different overload
+                    rvalue_type = reinferred_rvalue_type
 
             left_rv_types, star_rv_types, right_rv_types = self.split_around_star(
                 rvalue_type.items, star_index, len(lvalues)
@@ -5159,12 +5190,14 @@ class TypeChecker(NodeVisitor[None], TypeCheckerSharedApi, SplittingVisitor):
                         new_type = self.named_generic_type(typename, [key_type, value_type])
                         self.replace_partial_type(var, new_type, partial_types)
 
-    def type_requires_usage(self, typ: Type) -> tuple[str, ErrorCode] | None:
-        """Some types require usage in all cases. The classic example is
-        an unused coroutine.
+    def type_requires_usage(self, typ: Type, s: ExpressionStmt) -> tuple[str, ErrorCode] | None:
+        """Some types require usage in basically all cases. The classic
+        example is an unused coroutine.
 
         In the case that it does require usage, returns a note to attach
-        to the error message.
+        to the error message. We special case somethings that return
+        awaitables because in those particular cases we can guarantee
+        it's safe.
         """
         proper_type = get_proper_type(typ)
         if isinstance(proper_type, Instance):
@@ -5173,12 +5206,24 @@ class TypeChecker(NodeVisitor[None], TypeCheckerSharedApi, SplittingVisitor):
             if proper_type.type.fullname == "typing.Coroutine":
                 return ("Are you missing an await?", UNUSED_COROUTINE)
             if proper_type.type.get("__await__") is not None:
-                return ("Are you missing an await?", UNUSED_AWAITABLE)
+                # this is quite ad-hoc, but there's no good way around
+                # this. the alternative is a hardcoded list of
+                # TaskGroups and their respective functions, but that's
+                # a lot of maintenance!
+                if isinstance(s.expr, CallExpr) and isinstance(s.expr.callee, MemberExpr):
+                    called_on = get_proper_type(self.expr_checker.accept(s.expr.callee.expr))
+                    is_a_taskgroup = isinstance(
+                        called_on, Instance
+                    ) and called_on.type.fullname.endswith(".TaskGroup")
+                else:
+                    is_a_taskgroup = False
+                if not is_a_taskgroup:
+                    return ("Are you missing an await?", UNUSED_AWAITABLE)
         return None
 
     def visit_expression_stmt(self, s: ExpressionStmt) -> None:
         expr_type = self.expr_checker.accept(s.expr, allow_none_return=True, always_allow_any=True)
-        error_note_and_code = self.type_requires_usage(expr_type)
+        error_note_and_code = self.type_requires_usage(expr_type, s)
         if error_note_and_code:
             error_note, code = error_note_and_code
             self.fail(
@@ -5474,6 +5519,7 @@ class TypeChecker(NodeVisitor[None], TypeCheckerSharedApi, SplittingVisitor):
                     self.accept(s.finally_body)
 
         if s.finally_body:
+            previously_suppressed = self.binder.is_unreachable_warning_suppressed()
             # Then we try again for the more restricted set of options
             # that can fall through. (Why do we need to check the
             # finally clause twice? Depending on whether the finally
@@ -5490,6 +5536,11 @@ class TypeChecker(NodeVisitor[None], TypeCheckerSharedApi, SplittingVisitor):
                 with IterationErrorWatcher(self.msg.errors, iter_errors):
                     self.accept(s.finally_body)
             self.msg.iteration_dependent_errors(iter_errors)
+
+            if not previously_suppressed:
+                # The finally body might have warned about unreachability,
+                # but we still want anything afterwards to warn too.
+                self.binder.frames[-1].suppress_unreachable_warnings = False
 
     def visit_try_without_finally(self, s: TryStmt, try_frame: bool) -> None:
         """Type check a try statement, ignoring the finally block.
@@ -6858,9 +6909,13 @@ class TypeChecker(NodeVisitor[None], TypeCheckerSharedApi, SplittingVisitor):
                         for known_item in container_item_types:
                             # Match the should_coerce_literals logic from narrow_type_by_identity_equality
                             p_known_item = get_proper_type(known_item)
-                            if is_literal_type_like(p_known_item) or (
-                                isinstance(p_known_item, Instance) and p_known_item.type.is_enum
-                            ):
+                            if (
+                                is_literal_type_like(p_known_item)
+                                or (
+                                    isinstance(p_known_item, Instance)
+                                    and p_known_item.type.is_enum
+                                )
+                            ) and not has_custom_eq_checks(p_known_item):
                                 known_item = coerce_to_literal(known_item)
                             if_map, else_map = self.narrow_type_by_identity_equality(
                                 "==",
@@ -8129,7 +8184,20 @@ class TypeChecker(NodeVisitor[None], TypeCheckerSharedApi, SplittingVisitor):
         return self.analyze_iterable_item_type_without_expression(it, context)[1]
 
     def function_type(self, func: FuncBase) -> FunctionLike:
-        return function_type(func, self.named_type("builtins.function"))
+        typ = function_type(func, self.named_type("builtins.function"))
+        if (
+            isinstance(func, FuncItem)
+            and func.is_coroutine
+            and not func.is_async_generator
+            and func.type is None
+            and isinstance(typ, CallableType)
+        ):
+            any_type = AnyType(TypeOfAny.special_form)
+            ret_type = self.named_generic_type(
+                "typing.Coroutine", [any_type, any_type, typ.ret_type]
+            )
+            return typ.copy_modified(ret_type=ret_type)
+        return typ
 
     def push_type_map(self, type_map: TypeMap, *, from_assignment: bool = True) -> None:
         if is_unreachable_map(type_map):
@@ -8875,6 +8943,7 @@ def builtin_item_type(tp: Type) -> Type | None:
             "builtins.list",
             "builtins.tuple",
             "builtins.dict",
+            "builtins.frozendict",
             "builtins.set",
             "builtins.frozenset",
             "_collections_abc.dict_keys",

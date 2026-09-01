@@ -22,7 +22,13 @@ from mypyc.common import (
     TYPE_VAR_PREFIX,
 )
 from mypyc.ir.class_ir import ClassIR, all_concrete_classes
-from mypyc.ir.func_ir import FUNC_STATICMETHOD, FuncDecl, FuncIR, get_text_signature
+from mypyc.ir.func_ir import (
+    FUNC_CLASSMETHOD,
+    FUNC_STATICMETHOD,
+    FuncDecl,
+    FuncIR,
+    get_text_signature,
+)
 from mypyc.ir.ops import (
     NAMESPACE_MODULE,
     NAMESPACE_STATIC,
@@ -1419,13 +1425,17 @@ class Emitter:
         cname = f"{PREFIX}{fn.cname(self.names)}"
         wrapper_name = f"{cname}_wrapper"
         cfunc = f"(PyCFunction){cname}"
-        func_flags = "METH_FASTCALL | METH_KEYWORDS"
+        func_flags = ["METH_FASTCALL", "METH_KEYWORDS"]
+        if fn.class_name and fn.decl.kind == FUNC_STATICMETHOD:
+            func_flags.append("METH_STATIC")
+        elif fn.class_name and fn.decl.kind == FUNC_CLASSMETHOD:
+            func_flags.append("METH_CLASS")
         doc = f"PyDoc_STR({native_function_doc_initializer(fn)})"
         has_self_arg = "true" if fn.class_name and fn.decl.kind != FUNC_STATICMETHOD else "false"
 
         code_flags = "CO_COROUTINE"
         self.emit_line(
-            f'PyObject* {wrapper_name} = CPyFunction_New({module}, "{filepath}", "{name}", {cfunc}, {func_flags}, {doc}, {fn.line}, {code_flags}, {has_self_arg});'
+            f'PyObject* {wrapper_name} = CPyFunction_New({module}, "{filepath}", "{name}", {cfunc}, {" | ".join(func_flags)}, {doc}, {fn.line}, {code_flags}, {has_self_arg});'
         )
         self.emit_line(f"if (unlikely(!{wrapper_name}))")
         self.emit_line(error_stmt)
@@ -1434,8 +1444,17 @@ class Emitter:
     def emit_base_tp_function_call(
         self, derived_cl: ClassIR, tp_func: str, args: str, *, prefix: str = ""
     ) -> None:
+        # Walk past intermediate heap types (Python or mypyc classes) to reach a
+        # static C-level ancestor. Calling a heap type's tp_dealloc/tp_traverse/
+        # tp_clear would dispatch through subtype_dealloc, which uses Py_TYPE(self)
+        # (still our subtype) and re-enters our own function — infinite recursion.
         type_obj = self.type_struct_name(derived_cl)
-        self.emit_line(f"{prefix}{type_obj}->tp_base->{tp_func}({args});")
+        base_var = f"_base_{tp_func}"
+        self.emit_line(f"PyTypeObject *{base_var} = {type_obj}->tp_base;")
+        self.emit_line(f"while ({base_var}->tp_flags & Py_TPFLAGS_HEAPTYPE) {{")
+        self.emit_line(f"    {base_var} = {base_var}->tp_base;")
+        self.emit_line("}")
+        self.emit_line(f"{prefix}{base_var}->{tp_func}({args});")
 
 
 def c_array_initializer(components: list[str], *, indented: bool = False) -> str:
