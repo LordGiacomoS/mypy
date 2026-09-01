@@ -13,7 +13,7 @@ __all__ = ["UnionType"]
 [builtins fixtures/union_python3_14.pyi]
 
 
-[case lgsUnions314_testUnionInstanceEquivalence]
+[case lgsUnions314_testUnionInstanceEquivalenceTemporary]
 # flags: --python-version 3.14
 from typing import assert_type, Union
 from types import UnionType
@@ -79,4 +79,9 @@ __all__ = ["UnionType"]
 [builtins fixtures/union_python3_14.pyi]
 
 
--- [case lgsUnions314_test]
+# -- [case lgsUnions314_test]
+
+# [case lgsUnions314_asdjke1]
+# v: str = 1
+
+# # E:1 "Incompatible types in assignment (expression has type "int", variable has type "str")"
