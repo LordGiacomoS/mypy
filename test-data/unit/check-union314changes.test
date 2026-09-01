@@ -5,7 +5,6 @@ from types import UnionType
 # import typing_extensions
 
 assert_type(UnionType, type[Union])
-# assert_type(typing_extensions.Union, Union)
 [fixture types.pyi]
 from typing import Union as UnionType
 __all__ = ["UnionType"]
@@ -13,32 +12,17 @@ __all__ = ["UnionType"]
 [builtins fixtures/union_python3_14.pyi]
 
 
-# [case lgsUnions314_testUnionInstanceEquivalenceTemporary]
-# # flags: --python-version 3.14
-# from typing import assert_type, Union
-# from types import UnionType
-# # import typing_extensions
-
-# assert_type(UnionType[str, int], type[Union[str, int]])
-# # some issues with these because of how pep604 unions get parsed
-# assert_type(str | int, type[Union[str, int]]) # E: Expression is of type "Union | type[int]", not "type[str] | type[int]"
-# assert_type(Union[str | int], type[Union[str, int]]) # E: Expression is of type "Union | type[int]", not "type[str] | type[int]"
-# # assert_type(typing_extensions.Union[str, int], type[Union[str, int]])
-# [fixture types.pyi]
-# from typing import Union as UnionType
-# __all__ = ["UnionType"]
-# [typing fixtures/typing-union_python3_14.pyi]
-# [builtins fixtures/union_python3_14.pyi]
-
-# TODO: get these versions of tests to pass, and replace excepted ones in case above with them
 [case lgsUnions314_testUnionInstanceEquivalence]
 # flags: --python-version 3.14
 from typing import assert_type, Union
+from types import UnionType
+# import typing_extensions
 
 assert_type(UnionType[str, int], type[Union[str, int]])
+# some issues with these because of how pep604 unions get parsed
 assert_type(str | int, type[Union[str, int]])
 assert_type(Union[str | int], type[Union[str, int]])
-
+# assert_type(typing_extensions.Union[str, int], type[Union[str, int]])
 [fixture types.pyi]
 from typing import Union as UnionType
 __all__ = ["UnionType"]

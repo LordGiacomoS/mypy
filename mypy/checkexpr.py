@@ -4625,6 +4625,15 @@ class ExpressionChecker(ExpressionVisitor[Type], ExpressionCheckerSharedApi):
                 or left_type.type_object().fullname == "builtins.type"
             ):
                 return self.named_type("types.GenericAlias")
+            elif left_type.type_object().fullname == "typing.Union":
+                if isinstance(index, TupleExpr):
+                    return make_simplified_union([self.accept(item) for item in index.items])
+                elif isinstance(index, OpExpr):
+                    return self.visit_op_expr(index)
+                    # OpExpr parsing is unreliably inaccurate on pep604 unions, and for a
+                    # more accurate output (assuming that `index.op == "|"`), returning
+                    # `make_simplified_union([self.accept(item) for item in (index.left, index.right)])`
+                    # would be better, but that would only fix one symptom of a larger issue
 
         if isinstance(left_type, TypeVarType):
             return self.visit_index_with_type(
