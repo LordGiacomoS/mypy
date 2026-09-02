@@ -673,9 +673,10 @@ class TypeAnalyser(SyntheticTypeVisitor[Type], TypeAnalyzerPluginInterface):
             items = self.anal_array(t.args)
             if not items:
                 sym = self.lookup_qualified(t.name, t)
-                # print(sym.node)
-                return self.analyze_type_with_type_info(sym.node, t.args, t, t.empty_tuple_index)
-                # print(type(t))
+                if sym is not None and isinstance(sym.node, TypeInfo):
+                    return self.analyze_type_with_type_info(
+                        sym.node, t.args, t, t.empty_tuple_index
+                    )
             return UnionType.make_union(items, line=t.line, column=t.column)
         elif fullname == "typing.Optional":
             if len(t.args) != 1:
